@@ -34,13 +34,13 @@ import os
 try:
     import discord
 except ModuleNotFoundError:
-    os.system('pip install discord')
+    os.system('pip3 install discord')
     import discord
 
 try:
     import dotenv
 except ModuleNotFoundError:
-    os.system('pip install python-dotenv')
+    os.system('pip3 install python-dotenv')
     import dotenv
 
 from discord.ext import commands
@@ -72,7 +72,7 @@ async def tensecondloop():
               if not str(member.status.name) == 'offline':
                 members_online += 1
 
-          await channel.edit(name=member_zaehler.replace('<alle>', members_count).replace('<online', members_online))
+          await channel.edit(name=member_zaehler.replace('<alle>', str(members_count)).replace('<online>', str(members_online)))
     await asyncio.sleep(10)
 
 client.loop.create_task(tensecondloop())
@@ -127,7 +127,9 @@ async def unreact(ctx, *rolle):
 
 @client.command(help='Erstellt einen Member-Zähler')
 async def countsetup(ctx):
-    await ctx.guild.create_text_channel(name=member_zaehler)
+    kanal = await ctx.guild.create_voice_channel(name=member_zaehler)
+    await kanal.set_permissions(finde_rolle(ctx.guild, '*'), view_channel=True, connect=False)
+    await kanal.set_permissions(finde_rolle(ctx.guild, '@everyone'), view_channel=True, connect=False)
 
 async def create_support(channel, member):
     if not channel:
