@@ -29,14 +29,24 @@ rollen_auswahl = {
 
 spam_woerter = spam_woerter.split()
 
+import os
+
 try:
     import discord
 except ModuleNotFoundError:
-    import os
     os.system('pip install discord')
     import discord
+
+try:
+    import dotenv
+except ModuleNotFoundError:
+    os.system('pip install python-dotenv')
+    import dotenv
+
 from discord.ext import commands
 import asyncio
+
+dotenv.load_dotenv()
 
 intents = discord.Intents.all()
 intents.members = True
@@ -175,4 +185,4 @@ async def on_message(message):
 
     await client.process_commands(message) # führe den Command aus, falls es ein Command ist
 
-client.run(open('token.txt').read())
+client.run(os.getenv('TOKEN'))
