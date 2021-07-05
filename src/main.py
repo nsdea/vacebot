@@ -3,6 +3,9 @@ print('Bot starting...')
 import os
 import json
 import time
+from discord import user
+
+from discord.errors import Forbidden
 
 try:
     import discord
@@ -15,6 +18,8 @@ try:
 except ModuleNotFoundError:
     os.system('pip3 install python-dotenv')
     import dotenv
+
+import datetime
 
 from discord.ext import commands
 import asyncio
@@ -30,6 +35,7 @@ support_kanal_nameanfang = '📨-support-' # Der Support-Kanalname vor dem Namen
 
 team_rolle = 'Teammitglied' # wird als Ticket-Supportrolle genutzt
 standard_rolle = 'Spieler'
+mute_rolle = 'Muted'
 
 verifizierungs_kanal = '╚✅》verifizieren'
 rollen_kanaele = ['╠❕》rollen', verifizierungs_kanal] # Alle Kanäle, die ein Rollensystem haben, also auch Verifizierungskanäle
@@ -87,7 +93,6 @@ xp_kanaele = [
 dotenv.load_dotenv()
 
 intents = discord.Intents.all()
-intents.members = True
 client = commands.Bot(command_prefix=commands.when_mentioned_or(prefix), intents=intents, help_command=None)
 
 spam_woerter = spam_woerter.split()
@@ -158,6 +163,42 @@ async def on_ready():
 async def on_disconnect():
     print(f'Verbindung zum Bot instabil (Internetprobleme oder es liegt an Discord)!')
 
+async def one_minute_loop():
+    await client.wait_until_ready()
+
+    while not client.is_closed():
+
+        # MUTES
+
+        for user in get_data('mutes.txt').keys():
+            if get_data('mutes.txt', user):
+                if time.time() > get_data('mutes.txt', user):
+                    set_data('mutes.txt', None, user)
+                    for guild in client.guilds:
+                        if finde_rolle(guild, mute_rolle) and guild.get_member(int(user)):
+                            await guild.get_member(int(user)).remove_roles(finde_rolle(guild, mute_rolle))
+                            await finde_kanal(guild, log_kanal).send(embed=discord.Embed(title=f'{guild.get_member(int(user)).name} auto-unmuted', color=FARBE_GELB, description=f'Der Nutzer **{guild.get_member(int(user)).mention}** wurde vom System automatisch unmuted.\n'))
+
+            else:
+                for guild in client.guilds:
+                    if finde_rolle(guild, mute_rolle) and guild.get_member(int(user)):
+                        await guild.get_member(int(user)).remove_roles(finde_rolle(guild, mute_rolle))      
+
+        # BANS
+
+        for user in get_data('bans.txt').keys():
+            if get_data('bans.txt', user):
+                if time.time() > get_data('bans.txt', user):
+                    set_data('bans.txt', None, user)
+                    for guild in client.guilds:
+                        user_obj = await client.fetch_user(user)
+                        await guild.unban(user_obj)
+                        await finde_kanal(guild, log_kanal).send(embed=discord.Embed(title=f'{user} auto-unbanned', color=FARBE_GELB, description=f'Der Nutzer **{user}** wurde vom System automatisch entbannt.\n'))
+
+        await asyncio.sleep(60)
+
+client.loop.create_task(one_minute_loop())
+
 async def ten_second_loop():
     await client.wait_until_ready()
 
@@ -179,7 +220,7 @@ async def ten_second_loop():
 client.loop.create_task(ten_second_loop())
 
 globals()['minutes_since_start'] = 0
-async def one_minute_loop():
+async def minute_counter():
     await client.wait_until_ready()
 
     while not client.is_closed():
@@ -197,20 +238,18 @@ async def one_minute_loop():
         await asyncio.sleep(60)
         globals()['minutes_since_start'] += 1
 
-client.loop.create_task(one_minute_loop())
+client.loop.create_task(minute_counter())
 
 def finde_kanal(guild, name):
     for channel in guild.channels:
         if channel.name == name:
             return channel
-            break
     return None
 
 def finde_rolle(guild, name):
     for rolle in guild.roles:
         if rolle.name == name:
             return rolle
-            break
     return None
 
 @client.event
@@ -320,6 +359,14 @@ async def countsetup(ctx):
     await ctx.send(embed=discord.Embed(title='Bitte warten...', description=f'Der Kanal {kanal.mention} wird eingerichtet...\nDas kann bis zu 10 Sekunden dauern.', color=FARBE_GRUEN))
     await ctx.send(embed=discord.Embed(title='Zur Info', description=f'Der Memberzähler wird alle 10 Sekunden geupdatet und zählt keine Bots mit.\nBitte benenne den Kanal nicht um, denn sonst wird es nicht funktionieren.\nWenn du den Kanalnamen ändern willst, dann bitte frage die Bot-Entwickler, die Bot-Einstellung `member_zaehler` zu ändern.', color=FARBE_GELB))
 
+async def close_ticket(kanal):
+    await kanal.delete()
+    try:
+        await finde_kanal(kanal.guild, log_kanal).send(embed=discord.Embed(title='Support-Ticket beendet', description=f'🗑 **{kanal.name}** wurde beendet.', color=FARBE_ROT))
+    except AttributeError:
+        # kein Log-Kanal gefunden, also egal
+        pass
+
 async def create_support(channel, member):
     if not channel:
         return
@@ -338,12 +385,24 @@ async def create_support(channel, member):
     await kanal.set_permissions(finde_rolle(member.guild, team_rolle), connect=True, view_channel=True)
     await kanal.set_permissions(finde_rolle(member.guild, '@everyone'), connect=False, view_channel=False)
     
-    await kanal.send(content=finde_rolle(member.guild, team_rolle).mention, embed=discord.Embed(title='Support-Ticket', description='✅ Willkommen beim Support-Ticket! Hier kann dir der Support weiterhelfen.\n> Um den Kanal zu schließen, mach `!ticketclose`.', color=FARBE_GRUEN))
+    msg = await kanal.send(content=finde_rolle(member.guild, team_rolle).mention, embed=discord.Embed(title='Support-Ticket', description='✅ Willkommen beim Support-Ticket! Hier kann dir der Support weiterhelfen.\n> Um den Kanal zu schließen, mach `!ticketclose` oder reagiere mit :x:.', color=FARBE_GRUEN))
     try:
         await finde_kanal(member.guild, log_kanal).send(embed=discord.Embed(title='Neues Support-Ticket', description=f'📩 **{member.name}#{member.discriminator}** hat ein Support-Ticket erstellt: {kanal.mention}', color=FARBE_GRUEN))
     except AttributeError:
         # kein Log-Kanal gefunden?
         pass # egal!
+
+    await msg.add_reaction('❌')
+
+    def check(reaktion, nutzer):
+        return reaktion.message == msg
+
+    try:
+        await client.wait_for('reaction_add', check=check)
+    except asyncio.TimeoutError: # Zeit abgelaufen?
+        return # egal!
+
+    await close_ticket(kanal=kanal)
 
 @client.event
 async def on_voice_state_update(member, before, after):
@@ -365,12 +424,7 @@ async def ticketopen(ctx, user: discord.Member):
 @client.command(help='🎫Löscht einen Ticket-Kanal, funktioniert nur in einem Ticketkanal')
 async def ticketclose(ctx):
     if ctx.channel.name.startswith(support_kanal_nameanfang):
-        await ctx.channel.delete()
-        try:
-            await finde_kanal(ctx.guild, log_kanal).send(embed=discord.Embed(title='Support-Ticket beendet', description=f'🗑 **{ctx.channel.name}** wurde gelöscht von {ctx.author.mention}.', color=FARBE_ROT))
-        except AttributeError:
-            # kein Log-Kanal gefunden, also egal
-            pass
+        await close_ticket(kanal=ctx.channel)
 
 @client.command(aliases=['help'], help='Hilfe-Befehl für Spieler optimiert (nicht Team)')
 async def info(ctx, name=''):
@@ -405,17 +459,81 @@ async def info(ctx, name=''):
                     else:
                         text += f'{command.name}\n'
                     continue
-                    if category == '✨' and command.help[0] not in categories.keys():
-                        if command.aliases:
-                            text += f'{command.name} *({"/".join(command.aliases)})*\n'
-                        else:
-                            text += f'{command.name}\n'
+                    # if category == '✨' and command.help[0] not in categories.keys():
+                    #     if command.aliases:
+                    #         text += f'{command.name} *({"/".join(command.aliases)})*\n'
+                    #     else:
+                    #         text += f'{command.name}\n'
 
         # text += f'`{c.name}` {c.help[:50] if c.help else empty}{"..." if len(c.help) > 50 else empty}\n'
 
         embed = discord.Embed(title='Commands', color=FARBE_ROT, description=text, footer='Custom actions are not displayed here!')
         embed.set_footer(text='Run .help <command> for detailed info on a command')
         await ctx.send(embed=embed)
+
+@commands.has_permissions(kick_members=True)
+@client.command(help='🔧Mute eine Person (standardmäßig permanent). Mod only', usage='<person> (<stunden>)')
+async def mute(ctx, user: discord.Member, stunden: float=8760.0):
+    try:
+        await user.add_roles(finde_rolle(ctx.guild, mute_rolle))
+    except AttributeError:
+        await ctx.send(embed=discord.Embed(title='Fehler beim Mute', description=f'Keine Rolle mit dem Namen "{mute_rolle}"', color=FARBE_ROT))
+    else:
+        bis = time.time()+(3600*stunden)
+        set_data('mutes.txt', bis, user.id)
+        await finde_kanal(ctx.guild, log_kanal).send(embed=discord.Embed(title=f'{user.name} gemuted', color=FARBE_ROT, description=f'Der Nutzer {user.mention} wurde von {ctx.author.mention} gemuted.\nMute-Dauer:', timestamp=datetime.datetime.fromtimestamp(bis)))
+        await ctx.send(embed=discord.Embed(title=f'{user.name} gemuted', color=FARBE_ROT, description=f'Der Nutzer {user.mention} wurde von {ctx.author.mention} gemuted.\nMute-Dauer:', timestamp=datetime.datetime.fromtimestamp(bis)))
+
+@commands.has_permissions(kick_members=True)
+@client.command(help='🔧Unmute eine Person. Mod only', usage='<person>')
+async def unmute(ctx, user: discord.Member):
+    try:
+        await user.remove_roles(finde_rolle(ctx.guild, mute_rolle))
+    except AttributeError:
+        await ctx.send(embed=discord.Embed(title='Fehler beim Unmute', description=f'Keine Rolle mit dem Namen "{mute_rolle}"', color=FARBE_ROT))
+    else:
+        set_data('mutes.txt', None, user.id)      
+        await finde_kanal(ctx.guild, log_kanal).send(embed=discord.Embed(title=f'{user.name} unmuted', color=FARBE_GRUEN, description=f'Der Nutzer {user.mention} wurde von {ctx.author.mention} unmuted.\n'))
+        await ctx.send(embed=discord.Embed(title=f'{user.name} unmuted', color=FARBE_GRUEN, description=f'Der Nutzer {user.mention} wurde von {ctx.author.mention} unmuted.\n'))
+
+@client.command(help='🔧Zeige Info und Status eines Mutes an.', usage='(<person>)')
+async def muteinfo(ctx, user: discord.Member=None):
+    if not user: user = ctx.author
+
+    await ctx.send(embed=discord.Embed(title=f'Mutestatus für {user.name}', color=FARBE_ROT if get_data("mutes.txt", user.id) else FARBE_GRUEN, description=f'Der Nutzer {user.mention} ist {"gemuted bis:" if get_data("mutes.txt", user.id) else "nicht gemuted."}', timestamp=datetime.datetime.fromtimestamp(get_data("mutes.txt", user.id)) if get_data("mutes.txt", user.id) else discord.Embed.Empty)) 
+
+@commands.has_permissions(ban_members=True)
+@client.command(help='🔧Banne jemanden (standardmäßig permanent). Mod only', usage='<person> (<stunden>)')
+async def ban(ctx, user: discord.Member, stunden: float=8760.0):
+    user_backup = user
+
+    try:
+        await user.send(embed=discord.Embed(title='Du wurdest gebannt!', description=f'Herzlichen Glückwunsch.\nDu wurdest für {stunden} Stunden vom Server gebannt.', color=FARBE_ROT))
+        await user.ban()
+    except Forbidden:
+        await ctx.send(embed=discord.Embed(title='Fehler beim Ban', description=f'Keine Rechte.', color=FARBE_ROT))
+    else:
+        bis = time.time()+(3600*stunden)
+        set_data('bans.txt', bis, user.id)
+        await finde_kanal(ctx.guild, log_kanal).send(embed=discord.Embed(title=f'{user_backup.name} gebannt', color=FARBE_ROT, description=f'Der Nutzer mit der ID {user_backup.id} wurde von {ctx.author.mention} gebannt.\nBan-Dauer:', timestamp=datetime.datetime.fromtimestamp(bis)))
+        await ctx.send(embed=discord.Embed(title=f'{user_backup.name} gebannt', color=FARBE_ROT, description=f'Der Nutzer mit der ID {user_backup.id} wurde von {ctx.author.mention} gebannt.\nBan-Dauer:', timestamp=datetime.datetime.fromtimestamp(bis)))
+
+@commands.has_permissions(ban_members=True)
+@client.command(help='🔧Entbanne jemanden. Mod only', usage='<id>')
+async def unban(ctx, user_id: int):
+    try:
+        user = await client.fetch_user(user_id)
+        await ctx.guild.unban(user)
+    except Forbidden:
+        await ctx.send(embed=discord.Embed(title='Fehler beim Ban', description=f'Keine Rechte.', color=FARBE_ROT))
+    else:
+        set_data('bans.txt', None, user_id)      
+        await finde_kanal(ctx.guild, log_kanal).send(embed=discord.Embed(title=f'{user_id} entbannt', color=FARBE_GRUEN, description=f'Der Nutzer **{user_id}** wurde von {ctx.author.mention} entbannt.\n'))
+        await ctx.send(embed=discord.Embed(title=f'{user_id} entbannt', color=FARBE_GRUEN, description=f'Der Nutzer {user_id} wurde von {ctx.author.mention} entbannt.\n'))
+
+@client.command(help='🔧Zeige Info und Status eines Bans an.', usage='<id>')
+async def baninfo(ctx, user_id: int):
+    await ctx.send(embed=discord.Embed(title=f'Banstatus für {user_id}', color=FARBE_ROT if get_data("bans.txt", user_id) else FARBE_GRUEN, description=f'Der Nutzer **{user_id}** ist {"gebannt bis:" if get_data("bans.txt", user_id) else "nicht gebannt."}', timestamp=datetime.datetime.fromtimestamp(get_data("bans.txt", user_id)) if get_data("bans.txt", user_id) else discord.Embed.Empty)) 
 
 @client.command(aliases=['lvl'], help='📈Zeige dein Level an.')
 async def level(ctx, user: discord.Member=None):
@@ -441,9 +559,9 @@ async def level(ctx, user: discord.Member=None):
     else:
         farbe = FARBE_GRUEN
     
-    bar = round((  (xp-(exact_level(user)**2)) / ((exact_level(user)+1)**2)  )*10)
+    #bar = round((  (xp-(exact_level(user)**2)) / ((exact_level(user)+1)**2)  )*10)
 
-    await ctx.send(embed=discord.Embed(title='Leveling-Statistik für ' + str(user), description=f'''**:star2: Level:** {lvl if lvl else '0'}\n**:chart_with_upwards_trend: Level-Fortschritt:** {(lvl**2)-xp}/{(lvl+1)**2} XP\n**:boom: XP:** {xp if xp else 0}''', color=farbe))
+    await ctx.send(embed=discord.Embed(title='Leveling-Statistik für ' + str(user), description=f'''**:star2: Level:** {lvl if lvl else '0'}\n**:chart_with_upwards_trend: Benötigtes XP für nächstes Level:** {(lvl+1)**2} XP\n**:boom: XP:** {xp if xp else 0}''', color=farbe))
     #**Fortschrittsbalken:** {bar*':blue_square:'}{(10-bar)*':black_large_square:'}
 
 @client.event
@@ -481,29 +599,29 @@ async def on_message(message):
             
             globals()['message_cooldowns'][message.author.id] = time.time()
 
-    if message.channel.name in rollen_kanaele and not message.content.startswith(prefix + 'unreact '):
-        await message.delete()
+        if message.channel.name in rollen_kanaele and not message.content.startswith(prefix + 'unreact '):
+            await message.delete()
 
-    if message.channel.name == counting_kanal:
-            msg_count = 0
-            async for h_message in message.channel.history(limit=2):
-              if msg_count == 1:
-                # if message.author.id == h_message.author.id:
-                #   try:
-                #     await message.delete()
-                #   except:
-                #     pass
-                try:
-                  if int(h_message.content) + 1 != int(message.content):
-                    try:
-                      await message.delete()
-                    except:
-                      pass
-                except:
-                  try:
-                    await message.delete()
-                  except:
-                    pass
-              msg_count += 1
+        if message.channel.name == counting_kanal:
+                msg_count = 0
+                async for previous_message in message.channel.history(limit=2):
+                    if msg_count == 1:
+                        # if message.author.id == previous_message.author.id:
+                        #   try:
+                        #     await message.delete()
+                        #   except:
+                        #     pass
+                        try:
+                            if int(previous_message.content) + 1 != int(message.content):
+                                try:
+                                    await message.delete()
+                                except:
+                                    pass
+                        except:
+                            try:
+                                await message.delete()
+                            except:
+                                pass
+                    msg_count += 1
 
 client.run(os.getenv('TOKEN'))
