@@ -3,6 +3,8 @@ print('Bot starting...')
 import os
 import json
 import time
+import socket
+
 from discord import user
 
 from discord.errors import Forbidden
@@ -27,7 +29,11 @@ import asyncio
 # =================================================
 # >>> BOT-EINSTELLUNGEN <<<
 
+testing_mode = socket.gethostname() == 'uwuntu' # ob der Test-Modus an sein soll; auf "socket.gethostname() == 'uwuntu'" (ohne die "" schreiben) stellen, um es automatisch zu erkennen lassen
+
 prefix = '!'
+community_name = 'VaceMC'
+webseite = 'https://vacemc.de'
 
 support_erstellen = '➕ Ticket erstellen 📩'
 support_kanal = '📨-support-<name>'
@@ -155,9 +161,92 @@ def exact_level(user):
     return get_xp(user=user)**0.5
 
 @client.event
+async def on_command_error(ctx, error):
+  error_msg = 'Unbekannter Fehler.'
+  
+  if 'Invalid Form Body' in str(error):
+    error_msg = 'Sorry, die Nachricht ist zu lang.'
+  if 'Command raised an exception' in str(error):
+    error_msg = 'Sorry, es gibt ein technisches Problem:'
+  if isinstance(error, commands.CommandNotFound):
+    error_msg = f'Sorry, dieser Befehl existiert nicht. Benutze **`{prefix}help`** für eine Befehlsliste.'
+  if isinstance(error, commands.MissingRequiredArgument):
+    error_msg = f'Sorry, bitte folge der Befehlssyntax, das heißt was für Argumente benötigt werden und in welcher Reihenfolge.\nBenutze `{prefix}help <command>` für Info. Natürlich `<command>` durch den entsprechenden Befehl ersetzen.'
+  if isinstance(error, commands.TooManyArguments):
+    error_msg = f'Sorry, du hast zu viele Argumente angegeben.\nBenutze `{prefix}help <command>` für Info. Natürlich `<command>` durch den entsprechenden Befehl ersetzen.'
+  if isinstance(error, commands.Cooldown):
+    error_msg = 'Sorry, bitte sei geduldig.'
+  if isinstance(error, commands.MessageNotFound):
+    error_msg = 'Sorry, ich konnte die angegebene Nachricht nicht finden.'
+  if isinstance(error, commands.ChannelNotFound):
+    error_msg = 'Sorry, ich konnte den angegebenen Kanal nicht finden.'
+  if isinstance(error, commands.UserInputError):
+    error_msg = f'Sorry, bitte folge der Befehlssyntax, das heißt was für Argumente benötigt werden und in welcher Reihenfolge.\nBenutze `{prefix}help <command>` für Info. Natürlich `<command>` durch den entsprechenden Befehl ersetzen.'
+  if isinstance(error, commands.NoPrivateMessage):
+    error_msg = 'Sorry, ich kann dich nicht privat anschreiben, bitte DM mich erst.'
+  if isinstance(error, commands.MissingPermissions):
+    error_msg = 'Sorry, du hast keine Berechtigung, diesen Befehl auszuführen.'
+  if isinstance(error, commands.BotMissingPermissions):
+    error_msg = 'Sorry, ich habe keine Rechte, das zu tun.'
+  if isinstance(error, commands.ExtensionError):
+    error_msg = 'Sorry, ich kann die entsprechende Erweiterung nicht laden.'
+  if isinstance(error, commands.BadArgument):
+     error_msg = 'Sorry, bitte folge der Befehlssyntax, das heißt was für Argumente benötigt werden und in welcher Reihenfolge.\nBenutze `{prefix}help <command>` für Info. Natürlich `<command>` durch den entsprechenden Befehl ersetzen.'
+
+  error_msg += '\n```py\n' + str(error) + '\n```'
+
+  embed = discord.Embed(
+    title='Fehler',
+    description=error_msg,
+    color=0xff0000
+  )
+  
+  await ctx.send(embed=embed)
+  if testing_mode or error_msg == 'Unbekannter Fehler.':
+    raise error
+
+@client.command(help='📃Verbindungsstatistik')
+async def ping(ctx):
+  voice = discord.utils.get(client.voice_clients, guild=ctx.guild)
+
+  embed = discord.Embed(title=f'{community_name} Stats', color=discord.Color(0x0094FF), timestamp=bot_started_at)
+  embed.add_field(name=':desktop: Ping', value=str(round(client.latency * 1000, 2)) + 'ms', inline=False)
+  try:
+    embed.add_field(name=':loud_sound: Voice-System', value=str(round(voice.latency * 1000, 2)) + 'ms')
+  except:
+    embed.add_field(name=':loud_sound: Voice-System', value='*[inactive]*')
+  if socket.gethostname().count('-') != 4:
+    embed.add_field(name=f':gear: Privater host', value=f'{socket.gethostname()}', inline=False)
+  else:
+    embed.add_field(name=f':gear: Online host', value=f'{socket.gethostname()}', inline=False)
+  
+  embed.set_footer(text='Bot gestartet: ')
+  await ctx.send(embed=embed)
+
+@client.command(help='📃Information und Links.')
+async def info(ctx):
+  embed = discord.Embed(title=f'{community_name} Bot Info', color=discord.Color(0x0094FF), description=f'''
+  __**Links**__
+    [:desktop: Quellcode](https://github.com/nsde/vacebot)
+    [:scroll: Webseite]({webseite})
+  
+  __**Bot**__
+    **Konto:** {client.user}
+    **ID:** {client.user.id}
+    **Erstellt:** {client.user.created_at.strftime('%A, %B %d, %Y %H:%M:%S %p %Z')}
+
+    > **Made by <@657900196189044736> with <3**
+
+  ''', timestamp=bot_started_at)
+  embed.set_thumbnail(url=client.user.avatar_url)
+  embed.set_footer(text=f'Ping: {str(round(client.latency * 1000, 2))}ms ~ Letztes Bot-Update: ')
+  
+  await ctx.send(embed=embed)
+
+@client.event
 async def on_ready():
     print(f'Bot online: {client.user}')
-    await client.change_presence(activity=discord.Game(name='VaceMC bot!'))
+    await client.change_presence(activity=discord.Game(name='!help'))
 
 @client.event
 async def on_disconnect():
@@ -254,7 +343,7 @@ def finde_rolle(guild, name):
 
 @client.event
 async def on_member_join(member):
-    embed = discord.Embed(title='Willkommen auf VaceMC!', color=FARBE_ROT, url='https://web.vacemc.de', description=f'Viel Spaß auf dem Server, {member.mention}!\nDu bist der {len(member.guild.members)}. Member.') # f-string
+    embed = discord.Embed(title=f'Willkommen auf {community_name}!', color=FARBE_ROT, url=webseite, description=f'Viel Spaß auf dem Server, {member.mention}!\nDu bist der {len(member.guild.members)}. Member.') # f-string
     embed.set_thumbnail(url=member.avatar_url)
 
     kanal = finde_kanal(member.guild, '╔💐》willkommen')
@@ -426,8 +515,8 @@ async def ticketclose(ctx):
     if ctx.channel.name.startswith(support_kanal_nameanfang):
         await close_ticket(kanal=ctx.channel)
 
-@client.command(aliases=['help'], help='Hilfe-Befehl für Spieler optimiert (nicht Team)')
-async def info(ctx, name=''):
+@client.command(aliases=['commands', 'help'], help='Hilfe-Befehl für Spieler optimiert (nicht Team)')
+async def commandinfo(ctx, name=''):
     if name:
         for c in client.commands:
             if name.lower() == c.name or name.lower() in list(c.aliases):
@@ -459,16 +548,16 @@ async def info(ctx, name=''):
                     else:
                         text += f'{command.name}\n'
                     continue
-                    # if category == '✨' and command.help[0] not in categories.keys():
+                    # if category == '✨' and command{prefix}help[0] not in categories.keys():
                     #     if command.aliases:
                     #         text += f'{command.name} *({"/".join(command.aliases)})*\n'
                     #     else:
                     #         text += f'{command.name}\n'
 
-        # text += f'`{c.name}` {c.help[:50] if c.help else empty}{"..." if len(c.help) > 50 else empty}\n'
+        # text += f'`{c.name}` {c{prefix}help[:50] if c{prefix}help else empty}{"..." if len(c{prefix}help) > 50 else empty}\n'
 
         embed = discord.Embed(title='Commands', color=FARBE_ROT, description=text, footer='Custom actions are not displayed here!')
-        embed.set_footer(text='Run .help <command> for detailed info on a command')
+        embed.set_footer(text='Run {prefix}help <command> for detailed info on a command')
         await ctx.send(embed=embed)
 
 @commands.has_permissions(kick_members=True)
@@ -624,4 +713,5 @@ async def on_message(message):
                                 pass
                     msg_count += 1
 
+bot_started_at = datetime.datetime.now()
 client.run(os.getenv('TOKEN'))
