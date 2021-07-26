@@ -484,7 +484,7 @@ async def create_support(channel, member):
     await msg.add_reaction('❌')
 
     def check(reaktion, nutzer):
-        return reaktion.message == msg
+        return reaktion.message == msg and not nutzer.bot
 
     try:
         await client.wait_for('reaction_add', check=check)
