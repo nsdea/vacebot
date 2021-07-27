@@ -396,8 +396,7 @@ async def minecraft(ctx):
     🖥️ **Prozessoren (CPUs):** `{daten["health"]["cpus"]}`
     🗄️ **Arbeitsspeicher (RAM): ** `{humanize.naturalsize(daten["health"]["totalMemory"])}`/`{humanize.naturalsize(daten["health"]["maxMemory"])}`
     ❌ **Spieler-Bans:** `{len(daten["bannedPlayers"])}`
-    ⛔ **IP-Bans:** `{len(daten["bannedIps"])}`
-    ⚙️ **Plugins:** `{}`
+    ⛔ **IP-Bans:** `{len(daten["bannedIps"])}``
     {f'📜 **MOTD:** `{daten["motd"]}`' if daten["motd"] != 'A Minecraft Server' else ''}
     '''.replace('``', '`?`')
 
@@ -411,7 +410,6 @@ async def minecraft(ctx):
         farbe = FARBE_ROT
 
     await ctx.send(embed=discord.Embed(title='Minecraft Server Status', description=text, color=farbe, timestamp=dateparser.parse(str(daten["health"]["uptime"]) + ' seconds ago')).set_footer(text='Server online seit: '))
-
 
 @client.command(help='🔧Testet das Verifizierungssystem')
 async def testverify(ctx):
