@@ -20,6 +20,7 @@ except ModuleNotFoundError:
     os.system('pip3 install python-dotenv')
     import dotenv
 
+import random
 import humanize
 import requests
 import datetime
@@ -48,6 +49,7 @@ support_kanal_nameanfang = '📨-support-' # Der Support-Kanalname vor dem Namen
 team_rolle = 'Teammitglied' # wird als Ticket-Supportrolle genutzt
 standard_rolle = 'Spieler'
 mute_rolle = 'Muted'
+synced_rolle = 'Synced'
 
 verifizierungs_kanal = '╚✅》verifizieren'
 rollen_kanaele = ['╠❕》rollen', verifizierungs_kanal] # Alle Kanäle, die ein Rollensystem haben, also auch Verifizierungskanäle
@@ -106,7 +108,6 @@ xp_kanaele = [
 
 # Minecraft Server Addresse (IP) mit : und Port
 MC_ADDRESSE = os.getenv('MCIP') + ':' + os.getenv('MCPORT') # was in der ".env"-Datei hinterlegt wurde
-
 
 # ==================================================
 
@@ -312,8 +313,8 @@ async def ten_second_loop():
                     for member in guild.members:
                         if not member.bot:
                             members_count += 1
-                        if not str(member.status.name) == 'offline':
-                            members_online += 1
+                            if not str(member.status.name) == 'offline':
+                                members_online += 1
 
                     await channel.edit(name=member_zaehler.replace('<alle>', str(members_count)).replace('<online>', str(members_online)))
         await asyncio.sleep(10)
@@ -386,7 +387,7 @@ async def on_raw_reaction_add(data):
             if rolle == data.emoji.name:
                 await data.member.add_roles(finde_rolle(data.member.guild, rollen_auswahl[rolle]))
 
-@client.command(help='🔧Zeigt Infos über den Minecraft-Server an.')
+@client.command(help='🎮Zeigt Infos über den Minecraft-Server an.')
 async def minecraft(ctx):
     daten = json.loads(requests.get('http://' + MC_ADDRESSE + '/v1/server', headers={'key': os.getenv('MCKEY')}).text)
 
@@ -396,7 +397,7 @@ async def minecraft(ctx):
     🖥️ **Prozessoren (CPUs):** `{daten["health"]["cpus"]}`
     🗄️ **Arbeitsspeicher (RAM): ** `{humanize.naturalsize(daten["health"]["totalMemory"])}`/`{humanize.naturalsize(daten["health"]["maxMemory"])}`
     ❌ **Spieler-Bans:** `{len(daten["bannedPlayers"])}`
-    ⛔ **IP-Bans:** `{len(daten["bannedIps"])}``
+    ⛔ **IP-Bans:** `{len(daten["bannedIps"])}`
     {f'📜 **MOTD:** `{daten["motd"]}`' if daten["motd"] != 'A Minecraft Server' else ''}
     '''.replace('``', '`?`')
 
@@ -410,6 +411,53 @@ async def minecraft(ctx):
         farbe = FARBE_ROT
 
     await ctx.send(embed=discord.Embed(title='Minecraft Server Status', description=text, color=farbe, timestamp=dateparser.parse(str(daten["health"]["uptime"]) + ' seconds ago')).set_footer(text='Server online seit: '))
+
+@client.command(help='🎮Verbinde dein Minecraft mit Discord')
+async def sync(ctx, name):
+    msg = await ctx.send(embed=discord.Embed(title=f'Sync mit "{name}"', description=f'Um dein Minecraft mit Discord zu verbinden:\n\n**1.** Trete dem Minecraft Server bei\n**2.** Stelle sicher, dass du in der Hauptlobby bist und lass Minecraft im Hintergrund laufen\n**3.** Wechsle zu Discord\n**4.** Reagiere mit dem Häkchen (innerhalb der nächsten 60 Minuten)\n**5.** Den Code, der in den (ingame) Minecraft-Chat gesendet wurde, merken\n**6.** Den Code hier in {ctx.channel.mention} reinschreiben.', color=FARBE_ROT))
+    
+    await msg.add_reaction('☑️')
+
+    def check(reaktion, nutzer):
+        return reaktion.message == msg and nutzer == ctx.author
+
+    try:
+        await client.wait_for('reaction_add', check=check, timeout=3600)
+    except asyncio.TimeoutError: # Zeit abgelaufen?
+        return # egal!
+    
+    await ctx.send(embed=discord.Embed(title=f'Fast geschafft!', description='Merk\' dir den Code, der in den Minecraft Chat gesendet wurde und schreibe ihn hier ein!', color=FARBE_GELB))
+
+    code = ''
+    for _ in range(4):
+        code += random.choice('0123456789abcdef')
+
+    print(code)
+
+    def check(message):
+        return code in message.content.lower() and message.author == ctx.author
+
+    try:
+        await client.wait_for('message', check=check, timeout=3600)
+    except asyncio.TimeoutError: # Zeit abgelaufen?
+        return # egal!
+    
+    await ctx.send(embed=discord.Embed(title=f'Perfekt!', description='Dein Account ist jetzt gesichert. Vielen Dank!', color=FARBE_GRUEN))   
+
+@commands.has_permissions(manage_guild=True)
+@client.command(help='🔒Sende etwas an die Server-Konsole (ohne /, Admin only)', aliases=['k'])
+async def konsole(ctx, *cmd):
+    cmd = ' '.join(cmd)
+    response = requests.post('http://' + MC_ADDRESSE + '/v1/server/exec', headers={'key': os.getenv('MCKEY')}, data={'command': cmd})
+
+    if response.text:
+        color = FARBE_GRUEN
+        if 'Unknown command' in response.text:
+            color = FARBE_ROT
+    else:
+        color = FARBE_GELB
+
+    await ctx.send(embed=discord.Embed(title=f'Konsolen-Antwort darauf', description=f'`{response.text}`' if response.text else '*[**Keine Antwort erhalten**]*', color=color))   
 
 @client.command(help='🔧Testet das Verifizierungssystem')
 async def testverify(ctx):
@@ -573,7 +621,7 @@ async def commandinfo(ctx, name=''):
         def sortkey(x):
             return x.name
         
-        categories = {'🎫': 'Ticketsystem und Support', '📈': 'Levelsystem', '📃': 'Info und Hilfe', '🔧': 'Werkzeuge', '🎮': 'Spiel und Spass', '🔒': 'Speziell', '🔩': 'Sonstige', '✨': 'Neue Funktionen'}
+        categories = {'🎫': 'Ticketsystem und Support', '📈': 'Levelsystem', '📃': 'Info und Hilfe', '🔧': 'Werkzeuge', '🎮': 'Minecraft', '🔒': 'Speziell', '🔩': 'Sonstige', '✨': 'In Entwicklung'}
         
         text = ''
         for category in categories.keys():
