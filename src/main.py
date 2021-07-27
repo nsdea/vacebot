@@ -1,5 +1,4 @@
 print('Bot starting...')
-
 import os
 import json
 import time
@@ -21,13 +20,19 @@ except ModuleNotFoundError:
     os.system('pip3 install python-dotenv')
     import dotenv
 
+import requests
 import datetime
 
 from discord.ext import commands
 import asyncio
+import dateparser
+
+dotenv.load_dotenv()
 
 # =================================================
 # >>> BOT-EINSTELLUNGEN <<<
+
+# KANALNAMEN OHNE #HASHTAG!
 
 testing_mode = socket.gethostname() == 'uwuntu' # ob der Test-Modus an sein soll; auf "socket.gethostname() == 'uwuntu'" (ohne die "" schreiben) stellen, um es automatisch zu erkennen lassen
 
@@ -50,20 +55,21 @@ counting_kanal = '╠💬》zählen'
 
 member_zaehler = '💥 <online>/<alle> online' # du kannst die Platzhalter <online> und <alle> natürlich an eine andere Stelle packen oder ganz entfernen
 
-spam_woerter = 'scheiße fick sex penis arschloch drecks huren' # mit Leertaste getrennte Wörter, die vom Anti-Spam erkannt werden
+spam_woerter = 'scheiße fick sex penis arsch drecks huren' # mit Leertaste getrennte Wörter, die vom Anti-Spam erkannt werden
 
+# EMOJIS ALS UNICODE CHARACTER - NICHT SO ":heart:"!
 rollen_auswahl = {
 #   EMOJI    ROLLE
 #     |        |
 #     v        v
-#   '💥': 'RollenName',         nur ein Beispiel, ist nicht wirklich aktiv
+#   '💥': 'RollenName',         nur ein Beispiel, ist nicht wirklich aktiv, da es auskommentiert ist
     '💙': 'TestBlau',
     '❤️': 'TestRot',
     # und so weiter
 }
 
 # DELAY IN MINUTEN! KEIN STRING/TEXT (z.B. '5') SONDERN INT/ZAHL (z.B. 5)!
-# Embed ist optional
+# Embed ist optional und ein <discord.Embed> Objekt!
 # Minimum delay ist eine Minute!
 delay_nachrichten = [
     {'kanal': 'testdelay', 'delay': 2, 'text': 'Hallo Test', 'embed': discord.Embed(title='Titel', description='Hey')},
@@ -73,30 +79,35 @@ delay_nachrichten = [
 
 # Einfach nach "Colorpicker" und den Hex-Wert kopieren.
 # Nicht das 0x am Anfang vergessen!
+# KEINE "Anführungszeichen"!
 FARBE_ROT = 0xFF0000
 FARBE_GRUEN = 0x00FF00
 FARBE_GELB = 0xFFFF00
 
 # Level as INT/ZAHL (z.B. 5 - NICHT '5')!
 leveling_rollen = {
-#  LEVEL ROLLE
-#    |     |
-#    v     v
+#  LEVEL    ROLLE
+#    |        |
+#    v        v
     5:  'Level 5 Belohnung',
     10: 'Level 10 Belohnung',
     12: 'Level 12 Belohnung',
 }
 
 leveling_datei = 'leveling.json'
+bans_datei = 'bans.json'
+mutes_datei = 'mutes.json'
 
 # Kanäle, in denen man XP kriegen kann
 xp_kanaele = [
     '╔💬》chat-1', '╠💬》chat-2', '╚👥》user-helfen-user'
 ]
 
-# ==================================================
+# Minecraft Server Addresse (IP) mit : und Port
+MC_ADDRESSE = os.getenv('MCIP') + ':' + os.getenv('MCPORT') # was in der ".env"-Datei hinterlegt wurde
 
-dotenv.load_dotenv()
+
+# ==================================================
 
 intents = discord.Intents.all()
 client = commands.Bot(command_prefix=commands.when_mentioned_or(prefix), intents=intents, help_command=None)
@@ -259,10 +270,10 @@ async def one_minute_loop():
 
         # MUTES
 
-        for user in get_data('mutes.txt').keys():
-            if get_data('mutes.txt', user):
-                if time.time() > get_data('mutes.txt', user):
-                    set_data('mutes.txt', None, user)
+        for user in get_data(mutes_datei).keys():
+            if get_data(mutes_datei, user):
+                if time.time() > get_data(mutes_datei, user):
+                    set_data(mutes_datei, None, user)
                     for guild in client.guilds:
                         if finde_rolle(guild, mute_rolle) and guild.get_member(int(user)):
                             await guild.get_member(int(user)).remove_roles(finde_rolle(guild, mute_rolle))
@@ -275,10 +286,10 @@ async def one_minute_loop():
 
         # BANS
 
-        for user in get_data('bans.txt').keys():
-            if get_data('bans.txt', user):
-                if time.time() > get_data('bans.txt', user):
-                    set_data('bans.txt', None, user)
+        for user in get_data(bans_datei).keys():
+            if get_data(bans_datei, user):
+                if time.time() > get_data(bans_datei, user):
+                    set_data(bans_datei, None, user)
                     for guild in client.guilds:
                         user_obj = await client.fetch_user(user)
                         await guild.unban(user_obj)
@@ -373,6 +384,19 @@ async def on_raw_reaction_add(data):
         for rolle in rollen_auswahl.keys():
             if rolle == data.emoji.name:
                 await data.member.add_roles(finde_rolle(data.member.guild, rollen_auswahl[rolle]))
+
+@client.command(help='🔧Zeigt Infos über den Minecraft-Server an.')
+async def minecraft(ctx):
+    daten = json.loads(requests.get('http://' + MC_ADDRESSE + '/v1/server', headers={'key': os.getenv('MCKEY')}).text)
+    print(daten)
+    text = f'''
+    🔧 **System:** {daten["name"]} v{"bukkitVersion"} | {daten["version"]}
+    📈 **Ticks pro Sekunde (TPS):** {daten["tps"]} (höher = besser, 20 = perfekt)
+    🖥️ **Prozessoren (CPUs):** {daten["health"]["cpus"]}
+    🗄️ **Arbeitsspeicher (RAM): **
+    📜 **MOTD:** {daten["motd"]}
+    '''
+    await ctx.send(embed=discord.Embed(title='Minecraft Server Status', description=text, color=FARBE_GRUEN))
 
 @client.command(help='🔧Testet das Verifizierungssystem')
 async def testverify(ctx):
@@ -569,7 +593,7 @@ async def mute(ctx, user: discord.Member, stunden: float=8760.0):
         await ctx.send(embed=discord.Embed(title='Fehler beim Mute', description=f'Keine Rolle mit dem Namen "{mute_rolle}"', color=FARBE_ROT))
     else:
         bis = time.time()+(3600*stunden)
-        set_data('mutes.txt', bis, user.id)
+        set_data(mutes_datei, bis, user.id)
         await finde_kanal(ctx.guild, log_kanal).send(embed=discord.Embed(title=f'{user.name} gemuted', color=FARBE_ROT, description=f'Der Nutzer {user.mention} wurde von {ctx.author.mention} gemuted.\nMute-Dauer:', timestamp=datetime.datetime.fromtimestamp(bis)))
         await ctx.send(embed=discord.Embed(title=f'{user.name} gemuted', color=FARBE_ROT, description=f'Der Nutzer {user.mention} wurde von {ctx.author.mention} gemuted.\nMute-Dauer:', timestamp=datetime.datetime.fromtimestamp(bis)))
 
@@ -581,7 +605,7 @@ async def unmute(ctx, user: discord.Member):
     except AttributeError:
         await ctx.send(embed=discord.Embed(title='Fehler beim Unmute', description=f'Keine Rolle mit dem Namen "{mute_rolle}"', color=FARBE_ROT))
     else:
-        set_data('mutes.txt', None, user.id)      
+        set_data(mutes_datei, None, user.id)      
         await finde_kanal(ctx.guild, log_kanal).send(embed=discord.Embed(title=f'{user.name} unmuted', color=FARBE_GRUEN, description=f'Der Nutzer {user.mention} wurde von {ctx.author.mention} unmuted.\n'))
         await ctx.send(embed=discord.Embed(title=f'{user.name} unmuted', color=FARBE_GRUEN, description=f'Der Nutzer {user.mention} wurde von {ctx.author.mention} unmuted.\n'))
 
@@ -591,7 +615,7 @@ async def muteinfo(ctx, user: discord.Member=None):
 
     await ctx.send(embed=discord.Embed(title=f'Mutestatus für {user.name}', color=FARBE_ROT if get_data("mutes.txt", user.id) else FARBE_GRUEN, description=f'Der Nutzer {user.mention} ist {"gemuted bis:" if get_data("mutes.txt", user.id) else "nicht gemuted."}', timestamp=datetime.datetime.fromtimestamp(get_data("mutes.txt", user.id)) if get_data("mutes.txt", user.id) else discord.Embed.Empty)) 
 
-@commands.has_permissions(ban_members=True)
+@commands.has_permissions(move_members=True)
 @client.command(help='🔧Banne jemanden (standardmäßig permanent). Mod only', usage='<person> (<stunden>)')
 async def ban(ctx, user: discord.Member, stunden: float=8760.0):
     user_backup = user
@@ -603,11 +627,11 @@ async def ban(ctx, user: discord.Member, stunden: float=8760.0):
         await ctx.send(embed=discord.Embed(title='Fehler beim Ban', description=f'Keine Rechte.', color=FARBE_ROT))
     else:
         bis = time.time()+(3600*stunden)
-        set_data('bans.txt', bis, user.id)
+        set_data(bans_datei, bis, user.id)
         await finde_kanal(ctx.guild, log_kanal).send(embed=discord.Embed(title=f'{user_backup.name} gebannt', color=FARBE_ROT, description=f'Der Nutzer mit der ID {user_backup.id} wurde von {ctx.author.mention} gebannt.\nBan-Dauer:', timestamp=datetime.datetime.fromtimestamp(bis)))
         await ctx.send(embed=discord.Embed(title=f'{user_backup.name} gebannt', color=FARBE_ROT, description=f'Der Nutzer mit der ID {user_backup.id} wurde von {ctx.author.mention} gebannt.\nBan-Dauer:', timestamp=datetime.datetime.fromtimestamp(bis)))
 
-@commands.has_permissions(ban_members=True)
+@commands.has_permissions(move_members=True)
 @client.command(help='🔧Entbanne jemanden. Mod only', usage='<id>')
 async def unban(ctx, user_id: int):
     try:
@@ -616,7 +640,7 @@ async def unban(ctx, user_id: int):
     except Forbidden:
         await ctx.send(embed=discord.Embed(title='Fehler beim Ban', description=f'Keine Rechte.', color=FARBE_ROT))
     else:
-        set_data('bans.txt', None, user_id)      
+        set_data(bans_datei, None, user_id)      
         await finde_kanal(ctx.guild, log_kanal).send(embed=discord.Embed(title=f'{user_id} entbannt', color=FARBE_GRUEN, description=f'Der Nutzer **{user_id}** wurde von {ctx.author.mention} entbannt.\n'))
         await ctx.send(embed=discord.Embed(title=f'{user_id} entbannt', color=FARBE_GRUEN, description=f'Der Nutzer {user_id} wurde von {ctx.author.mention} entbannt.\n'))
 

@@ -1,5 +1,15 @@
+.env_backup
+
+/.vscode
+
 test.py
-leveling.pickle
+
+mutes.txt
+leveling.txt
+
+mutes.json
+bans.json
+leveling.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

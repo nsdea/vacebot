@@ -1,0 +1,104 @@
+# THIS IS SECRET STUFF
+# DONT GIVE ANYONE OR ANYTHING ACCESS
+# PLEASE!
+# AND READ THE README
+#
+# We added some lines so you don't reveal your
+# secret things by accident.
+#
+# Just scroll down a bit.
+#
+# Aaallll the way down to line 100
+#
+# That is where the fun starts
+#
+#
+#
+#
+#
+#
+# 20%
+#
+#
+#
+#
+#
+#
+#
+# Scroll down
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+# 40%
+#
+#
+#
+#
+#
+# You already got 50%
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+# 60%
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+# 75%
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+# 90%
+#
+#
+#
+#
+#
+#
+#
+#
+# There you go!
+#
+TOKEN=your-discord-bot-token-here
+MCIP=your-minecraft-server-ip-here
+MCPORT=your-servertap-port-here
+MCKEY=your-servertap-key-here-here

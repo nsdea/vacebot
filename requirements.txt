@@ -1,3 +1,5 @@
+humanize
 discord
-python-dotenv
 requests
+dateparser
+python-dotenv
