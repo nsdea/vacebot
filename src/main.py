@@ -20,6 +20,7 @@ except ModuleNotFoundError:
     os.system('pip3 install python-dotenv')
     import dotenv
 
+import humanize
 import requests
 import datetime
 
@@ -388,15 +389,29 @@ async def on_raw_reaction_add(data):
 @client.command(help='🔧Zeigt Infos über den Minecraft-Server an.')
 async def minecraft(ctx):
     daten = json.loads(requests.get('http://' + MC_ADDRESSE + '/v1/server', headers={'key': os.getenv('MCKEY')}).text)
-    print(daten)
+
     text = f'''
-    🔧 **System:** {daten["name"]} v{"bukkitVersion"} | {daten["version"]}
-    📈 **Ticks pro Sekunde (TPS):** {daten["tps"]} (höher = besser, 20 = perfekt)
-    🖥️ **Prozessoren (CPUs):** {daten["health"]["cpus"]}
-    🗄️ **Arbeitsspeicher (RAM): **
-    📜 **MOTD:** {daten["motd"]}
-    '''
-    await ctx.send(embed=discord.Embed(title='Minecraft Server Status', description=text, color=FARBE_GRUEN))
+    🔧 **System:** `{daten["name"]}` bzw. `{daten["version"]}`
+    📈 **Ticks pro Sekunde (TPS):** `{daten["tps"]}` (höher = besser; 20 = perfekt)
+    🖥️ **Prozessoren (CPUs):** `{daten["health"]["cpus"]}`
+    🗄️ **Arbeitsspeicher (RAM): ** `{humanize.naturalsize(daten["health"]["totalMemory"])}`/`{humanize.naturalsize(daten["health"]["maxMemory"])}`
+    ❌ **Spieler-Bans:** `{len(daten["bannedPlayers"])}`
+    ⛔ **IP-Bans:** `{len(daten["bannedIps"])}`
+    ⚙️ **Plugins:** `{}`
+    {f'📜 **MOTD:** `{daten["motd"]}`' if daten["motd"] != 'A Minecraft Server' else ''}
+    '''.replace('``', '`?`')
+
+    tps = float(daten["tps"])
+
+    if tps > 19:
+        farbe = FARBE_GRUEN
+    elif tps > 15:
+        farbe = FARBE_GELB
+    else:
+        farbe = FARBE_ROT
+
+    await ctx.send(embed=discord.Embed(title='Minecraft Server Status', description=text, color=farbe, timestamp=dateparser.parse(str(daten["health"]["uptime"]) + ' seconds ago')).set_footer(text='Server online seit: '))
+
 
 @client.command(help='🔧Testet das Verifizierungssystem')
 async def testverify(ctx):

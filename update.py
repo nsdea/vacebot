@@ -56,6 +56,7 @@ if 'y' in input('\nPackages updaten? "y" (empfohlen) oder "n": ').lower():
     print('Wir sagen bescheid, wenn es fertig ist (nicht davor schließen!).')
     input('\n--> Enter drücken, um loszulegen.\n\n\n')
 
+    open('requirements.txt', 'w', encoding='utf-8').write(requests.get('https://raw.githubusercontent.com/nsde/vacebot/main/requirements.txt').text)
     os.system('pip3 install -r requirements.txt')
     
     print('\n\n\n' + ('#'*50))
